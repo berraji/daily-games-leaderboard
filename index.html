@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daily Games Leaderboard</title>
+  <!-- TailwindCSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React 18 CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <!-- Babel standalone for in‑browser JSX transform -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-gray-100">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    // ---------- Helpers ----------
+    const { useState, useMemo } = React;
+
+    /**
+     * Extract game & score from a share message.
+     * Supported examples:
+     *   #Flagle #1177 (13.05.2025) 2/6  → 2
+     *   Mathle 1205 3/5                → 3
+     *   … = 7                          → 7 (Globle)
+     */
+    function parseResult(text) {
+      text = text.trim();
+      let game = "";
+      let score = null;
+
+      if (/#flagle/i.test(text)) {
+        game = "Flagle";
+        const m = text.match(/#Flagle.*?(\d+)\/\d+/i);
+        if (m) score = parseInt(m[1], 10);
+      } else if (/mathle/i.test(text)) {
+        game = "Mathle";
+        const m = text.match(/Mathle.*?(\d+)\/\d+/i);
+        if (m) score = parseInt(m[1], 10);
+      } else if (/globle/i.test(text)) {
+        game = "Globle";
+        const m = text.match(/=\s*(\d+)/);
+        if (m) score = parseInt(m[1], 10);
+      }
+
+      return game && score !== null ? { game, score } : null;
+    }
+
+    // ---------- Main Component ----------
+    function LeaderboardApp() {
+      const [name, setName] = useState("");
+      const [message, setMessage] = useState("");
+      const [results, setResults] = useState([]);
+
+      const handleSubmit = () => {
+        if (!name.trim()) {
+          alert("Please enter your name.");
+          return;
+        }
+        const parsed = parseResult(message);
+        if (!parsed) {
+          alert("Could not understand the game result. Paste the full share message.");
+          return;
+        }
+        setResults(prev => {
+          // Keep only the latest entry for this player & game
+          const filtered = prev.filter(r => !(r.name === name.trim() && r.game === parsed.game));
+          return [...filtered, { id: Date.now(), name: name.trim(), ...parsed }];
+        });
+        setMessage("");
+      };
+
+      // Build today’s leaderboard
+      const leaderboard = useMemo(() => {
+        const players = {};
+        results.forEach(({ name, game, score }) => {
+          if (!players[name]) players[name] = { name, Flagle: null, Globle: null, Mathle: null };
+          players[name][game] = score;
+        });
+        return Object.values(players)
+          .map(p => ({ ...p, total: (p.Flagle ?? 0) + (p.Globle ?? 0) + (p.Mathle ?? 0) }))
+          .sort((a, b) => a.total - b.total);
+      }, [results]);
+
+      return (
+        <div className="min-h-screen flex flex-col items-center p-4 space-y-6">
+          {/* Input Card */}
+          <div className="w-full max-w-xl bg-white shadow-lg rounded-2xl p-6 space-y-4">
+            <h1 className="text-2xl font-bold text-center">Daily Games Leaderboard</h1>
+            <input
+              className="w-full p-2 rounded border"
+              placeholder="Your name"
+              value={name}
+              onChange={e => setName(e.target.value)}
+            />
+            <textarea
+              className="w-full h-40 p-2 rounded border"
+              placeholder="Paste your game result here…"
+              value={message}
+              onChange={e => setMessage(e.target.value)}
+            ></textarea>
+            <button
+              className="w-full py-2 rounded bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
+              onClick={handleSubmit}
+            >
+              Submit Result
+            </button>
+          </div>
+
+          {/* Leaderboard Card */}
+          <div className="w-full max-w-3xl bg-white shadow-lg rounded-2xl p-6">
+            <h2 className="text-xl font-semibold mb-4">Today’s Ranking</h2>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b font-medium">
+                    <th className="text-left p-2">Rank</th>
+                    <th className="text-left p-2">Player</th>
+                    <th className="text-left p-2">Flagle</th>
+                    <th className="text-left p-2">Globle</th>
+                    <th className="text-left p-2">Mathle</th>
+                    <th className="text-left p-2">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leaderboard.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="p-4 text-center text-gray-500">
+                        No results yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    leaderboard.map((player, idx) => (
+                      <tr key={player.name} className="border-b hover:bg-gray-50">
+                        <td className="p-2 font-semibold">{idx + 1}</td>
+                        <td className="p-2">{player.name}</td>
+                        <td className="p-2">{player.Flagle ?? "—"}</td>
+                        <td className="p-2">{player.Globle ?? "—"}</td>
+                        <td className="p-2">{player.Mathle ?? "—"}</td>
+                        <td className="p-2 font-bold">{player.total}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Mount React app
+    ReactDOM.createRoot(document.getElementById("root")).render(<LeaderboardApp />);
+  </script>
+</body>
+</html>
